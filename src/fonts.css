@@ -1,0 +1,57 @@
+/* Bundled webfonts.
+ *
+ * Only the latin woff2 files are referenced: fontsource also ships a legacy
+ * `.woff` per weight, which WebView2 never needs, and pointing straight at the
+ * woff2 keeps that dead weight out of the installer.
+ *
+ * Both families are SIL Open Font License 1.1 - see THIRD_PARTY_NOTICES.md. */
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/dm-sans/files/dm-sans-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/dm-sans/files/dm-sans-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/bricolage-grotesque/files/bricolage-grotesque-latin-600-normal.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/bricolage-grotesque/files/bricolage-grotesque-latin-700-normal.woff2")
+    format("woff2");
+}

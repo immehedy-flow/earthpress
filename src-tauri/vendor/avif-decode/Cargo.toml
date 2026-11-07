@@ -1,0 +1,71 @@
+# Vendored copy of `avif-decode` 3.0.0 (BSD-3-Clause, © Kornel Lesiński).
+#
+# Why this exists
+# ---------------
+# On x86/x86_64, upstream `avif-decode` depends on `rav1d` with default features
+# enabled, and `rav1d`'s `default` feature list starts with `asm`. That `asm`
+# feature makes `rav1d`'s build script shell out to NASM, so the whole build
+# would require an assembly toolchain on every machine.
+#
+# `rav1d` is a Rust port of dav1d and has complete Rust fallbacks for every
+# routine the assembly replaces (`#[cfg(not(feature = "asm"))]` throughout
+# `src/mc.rs`, `src/itx.rs`, `src/loopfilter.rs`, `src/cdef.rs`, …), so simply
+# not enabling the feature is enough. Upstream already does exactly this for
+# non-x86 targets; this copy extends it to x86/x86_64.
+#
+# The only edit to upstream is the single `rav1d` dependency line under the
+# x86/x86_64 target below, plus the removal of the `[profile.*]` sections (a
+# non-root package's profiles are ignored by Cargo; the equivalents live in
+# EarthPress's root manifest). Every file in `src/` is byte-for-byte upstream.
+#
+# The `binary` feature (and its `lodepng` dependency) is not used by
+# EarthPress, which depends on this crate with `default-features = false`.
+
+[package]
+name = "avif-decode"
+version = "3.0.0"
+authors = ["Kornel <kornel@geekhood.net>"]
+categories = ["multimedia::images"]
+description = "Convert AVIF images to PNG or decompressed pixel data"
+homepage = "https://lib.rs/avif-decode"
+keywords = ["av1", "rav1d", "decoder", "heif"]
+license = "BSD-3-Clause"
+repository = "https://github.com/kornelski/avif-decode"
+edition = "2024"
+rust-version = "1.98"
+
+[[bin]]
+name = "avif-decode"
+path = "src/main.rs"
+required-features = ["binary"]
+
+[dependencies]
+avif-parse = "2.1.0"
+bytemuck = "1.25"
+imgref = "1.12.3"
+lodepng = { version = "3.12.2", optional = true }
+log = "0.4.34"
+quick-error = "2.0.1"
+rgb = { version = "0.8.53", default-features = false, features = ["bytemuck"] }
+yuv = "0.8.19"
+
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+# EarthPress patch: `default-features = false` drops rav1d's `asm` feature so no
+# NASM is needed. See the header comment above.
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+
+# rav1d failed to bundle required aarch64 asm headers
+# https://github.com/memorysafety/rav1d/issues/1449
+[target.'cfg(not(any(target_arch = "x86", target_arch = "x86_64")))'.dependencies]
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+
+[features]
+default = ["binary"]
+binary = ["dep:lodepng"]
+
+[badges]
+maintenance = { status = "passively-maintained" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--generate-link-to-definition"]

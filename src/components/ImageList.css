@@ -1,0 +1,64 @@
+/* Scrollable batch list. It grows with its rows until the preview card needs
+   its space, then it scrolls. */
+
+.image-list {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 0 8px;
+}
+
+.image-list.is-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.image-list--empty {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.empty-state {
+  align-items: center;
+  color: var(--tx3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 340px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  align-items: center;
+  background: var(--card);
+  border: 1px dashed var(--line2);
+  border-radius: 18px;
+  color: var(--tx3);
+  display: flex;
+  height: 56px;
+  justify-content: center;
+  margin-bottom: 8px;
+  width: 56px;
+}
+
+.empty-state__title {
+  color: var(--tx2);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.empty-state__hint {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+}

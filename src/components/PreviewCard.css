@@ -1,0 +1,226 @@
+/* Preview card. Spec: 16px radius, 44px header, 40px footer, 10px image radius. */
+
+.preview-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin: 12px 16px 16px;
+  min-height: 190px;
+  overflow: hidden;
+}
+
+.preview-card__header {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 12px;
+  height: 44px;
+  justify-content: space-between;
+  padding: 0 12px 0 16px;
+}
+
+.preview-card__heading {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preview-card__title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.preview-card__name {
+  color: var(--tx3);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-card__fit {
+  color: var(--tx3);
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-card__tools {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 10px;
+}
+
+.preview-card__segmented {
+  background: var(--seg);
+  border-radius: 10px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+}
+
+.preview-card__segment {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--tx2);
+  font-size: 12px;
+  font-weight: 600;
+  height: 26px;
+  padding: 0 10px;
+}
+
+.preview-card__segment.is-active {
+  background: var(--segon);
+  color: var(--tx);
+}
+
+.preview-card__segment:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* --- stage ---------------------------------------------------------------- */
+
+.preview-card__stage {
+  background: var(--seg);
+  border-radius: 10px;
+  flex: 1;
+  margin: 0 12px;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.preview-card__stage.is-side-by-side {
+  display: flex;
+  gap: 2px;
+}
+
+.preview-card__pane {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.preview-card__image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.preview-card__image--after {
+  inset: 0;
+  position: absolute;
+}
+
+.preview-card__placeholder {
+  align-items: center;
+  color: var(--tx3);
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  gap: 8px;
+  height: 100%;
+  justify-content: center;
+}
+
+.preview-card__label {
+  background: rgba(20, 16, 12, 0.74);
+  border-radius: 11px;
+  color: #fffaf0;
+  font-size: 11.5px;
+  font-weight: 600;
+  height: 22px;
+  line-height: 22px;
+  padding: 0 9px;
+  position: absolute;
+  top: 10px;
+  z-index: 2;
+}
+
+.preview-card__label--left {
+  left: 10px;
+}
+
+.preview-card__label--right {
+  color: #cfe3a4;
+  right: 10px;
+}
+
+.preview-card__divider {
+  background: #fffaf0;
+  bottom: 0;
+  margin-left: -1px;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 2px;
+  z-index: 3;
+}
+
+.preview-card__handle {
+  align-items: center;
+  background: #fffaf0;
+  border-radius: 17px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: #2b251d;
+  display: flex;
+  height: 34px;
+  justify-content: center;
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px;
+}
+
+/* A full-stage range input: dragging anywhere moves the divider, and the
+   keyboard works for free. */
+.preview-card__scrubber {
+  cursor: ew-resize;
+  height: 100%;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  width: 100%;
+  z-index: 4;
+}
+
+.preview-card__busy {
+  background: rgba(20, 16, 12, 0.74);
+  border-radius: 9px;
+  bottom: 10px;
+  color: #fffaf0;
+  font-size: 11px;
+  padding: 3px 8px;
+  position: absolute;
+  right: 10px;
+  z-index: 5;
+}
+
+/* --- footer --------------------------------------------------------------- */
+
+.preview-card__footer {
+  align-items: center;
+  color: var(--tx2);
+  display: flex;
+  flex: none;
+  font-size: 12.5px;
+  height: 40px;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.preview-card__note {
+  color: var(--tx3);
+  font-size: 12px;
+}

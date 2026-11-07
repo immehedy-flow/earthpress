@@ -1,0 +1,99 @@
+[package]
+name = "earthpress"
+version = "2.1.0"
+description = "A warm local image converter and compressor for Windows."
+authors = ["EarthPress"]
+license = "MIT"
+edition = "2021"
+# Driven by `avif-decode` 3 (edition 2024) and `rav1d` 1.1, not by our own code.
+rust-version = "1.98"
+
+[lib]
+name = "earthpress_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.9", features = [] }
+tauri-plugin-dialog = "2.4"
+tauri-plugin-opener = "2.5"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Decoding of JPEG / PNG / WebP / BMP / TIFF / GIF. All pure Rust.
+image = { version = "0.25", default-features = false, features = [
+  "jpeg",
+  "png",
+  "webp",
+  "bmp",
+  "tiff",
+  "gif",
+] }
+
+# Encoding
+jpeg-encoder = "0.7"   # progressive + optimised Huffman JPEG, pure Rust
+png = "0.17"           # compression control + indexed palettes
+# zenwebp 0.2.x is the last version licensed MIT OR Apache-2.0.
+# 0.3 and later are AGPL-3.0-or-commercial (see its README), so this pin is
+# load-bearing for EarthPress staying MIT. Do not bump it.
+zenwebp = "0.2"             # pure-Rust lossy + lossless WebP
+ravif = { version = "0.13", default-features = false, features = ["threading"] } # AVIF encode, no nasm
+# AVIF decode via rav1d. Uses the vendored patch below to keep rav1d's `asm`
+# feature (and therefore NASM) out of the build; see `vendor/avif-decode`.
+avif-decode = { version = "3", default-features = false }
+
+# Metadata + orientation
+kamadak-exif = "0.6"
+
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tauri-plugin-notification = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+# NOTE: `panic = "abort"` is deliberately NOT set. The conversion command uses
+# `catch_unwind` to release the busy flag if a worker panics, and that needs
+# unwinding to stay enabled.
+
+# The app ships with `opt-level = "s"`, but the codecs are the hot path and
+# AV1 in particular leans on tight loops. Give them a normal optimisation level
+# so AVIF encode/decode is not punished for the size win everywhere else.
+[profile.release.package.rav1d]
+opt-level = 3
+
+[profile.release.package.rav1e]
+opt-level = 3
+
+[profile.release.package.ravif]
+opt-level = 3
+
+# Dependency profiles are ignored in debug builds, where unoptimised AV1 would
+# be several orders of magnitude slower and make `tauri dev` unusable on an
+# AVIF file. These mirror the settings upstream `avif-decode` requests.
+[profile.dev.package.rav1d]
+opt-level = 2
+debug-assertions = false
+
+[profile.dev.package.rav1e]
+opt-level = 2
+debug-assertions = false
+
+[profile.dev.package.ravif]
+opt-level = 2
+debug-assertions = false
+
+[profile.dev.package.yuv]
+opt-level = 2
+debug-assertions = false
+
+# `rav1d`'s `asm` feature is the only reason NASM would ever be needed, and
+# `avif-decode` turns it on for x86/x86_64 by default. The vendored copy in
+# `vendor/avif-decode` depends on `rav1d` with `default-features = false`, so
+# the build stays pure Rust. Bumping `avif-decode` means re-applying that patch.
+[patch.crates-io]
+avif-decode = { path = "vendor/avif-decode" }

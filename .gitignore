@@ -1,32 +1,47 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
+# Dependencies
 node_modules/
+
+# Frontend build output
 dist/
 dist-ssr/
 *.local
 
-# Editor directories and files
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Installers
+src-tauri/target/release/bundle/
+release/
+
+# Editor / OS noise
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
+desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.pdb
 
+# Local environment
+.env
+.env.*
+.opencode/
+
+# Local design exports and duplicated icon sets
+NextVersion/
 build/
-release/
-release-compact/
-release-crop/
-release-assets/
-*.blockmap
-builder-debug.yml
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript incremental build info
+*.tsbuildinfo

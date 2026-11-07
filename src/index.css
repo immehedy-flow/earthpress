@@ -1,10 +1,113 @@
+/* =============================================================================
+   EarthPress 2.0 design tokens.
+   Values are lifted from the "Ready · dark / Batch complete · light" mockups so
+   the implementation matches the artboards exactly.
+
+   Palette (named swatches):
+     dark  - window #171310 (charcoal-brown), panel #201b16 (bark),
+             card #29231c (bark +1), raised #352d24 (bark +2),
+             accent #93ad62 (moss), accent ink #a9c179 (sage)
+     light - window #efe6d3 (sand), panel #fbf7ec (paper), card #f4ecdb (sand +1),
+             raised #eadfc7 (sand +2), accent #566f31 (moss), accent ink #4f6a2b
+     both  - borders from the surface ramp, clay reserved for status tones
+
+   Contrast: every text pair was measured. The mockup's --tx3 failed AA on the
+   raised surface in both themes (dark 4.41, light 4.05), so it is nudged here
+   to #a49a89 / #6d6254, which clears 4.5:1 on every surface it sits on.
+   ========================================================================== */
+
 :root {
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  color-scheme: light;
+
+  /* surface ramp */
+  --bg: #efe6d3;
+  --panel: #fbf7ec;
+  --card: #f4ecdb;
+  --raise: #eadfc7;
+
+  /* borders */
+  --line: #dccfb4;
+  --line2: #c2b391;
+
+  /* text tiers */
+  --tx: #2b251d;
+  --tx2: #5c5242;
+  --tx3: #6d6254;
+
+  /* accent */
+  --acc: #4f6a2b;
+  --accf: #566f31;
+  --onacc: #fbf7ec;
+  --soft: rgba(86, 111, 49, 0.13);
+
+  /* segmented controls */
+  --seg: #e9dec6;
+  --segon: #fffdf6;
+
+  /* status */
+  --danger: #a03421;
+  --danger-soft: rgba(160, 52, 33, 0.12);
+  --warn: #8a5a12;
+  --warn-soft: rgba(138, 90, 18, 0.12);
+
+  /* effects */
+  --shadow-sm: 0 1px 2px rgba(63, 51, 37, 0.06);
+  --shadow: 0 10px 30px rgba(63, 51, 37, 0.1);
+
+  /* geometry */
+  --r-panel: 20px;
+  --r-card: 16px;
+  --r-row: 14px;
+  --r-thumb: 10px;
+  --r-ctl: 10px;
+  --r-chip: 8px;
+
+  /* motion */
+  --dur: 160ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* type */
+  --font-body: "DM Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #171310;
+  --panel: #201b16;
+  --card: #29231c;
+  --raise: #352d24;
+
+  --line: #3b3229;
+  --line2: #56493c;
+
+  --tx: #f3ebdd;
+  --tx2: #bcb09b;
+  --tx3: #a49a89;
+
+  --acc: #a9c179;
+  --accf: #93ad62;
+  --onacc: #17210b;
+  --soft: rgba(147, 173, 98, 0.16);
+
+  --seg: #171310;
+  --segon: #3a3128;
+
+  --danger: #e8927c;
+  --danger-soft: rgba(232, 146, 124, 0.14);
+  --warn: #e0b070;
+  --warn-soft: rgba(224, 176, 112, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+html {
+  font-family: var(--font-body);
   font-size: 14px;
-  color: #2e2923;
-  background: #f4efe7;
+  color: var(--tx);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,19 +118,26 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-width: 960px;
-  min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(255, 252, 246, 0.86), rgba(244, 239, 231, 0.92)),
-    #f4efe7;
+  overflow: hidden;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+  color: inherit;
 }
 
 button {
@@ -35,11 +145,106 @@ button {
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+select:disabled {
   cursor: not-allowed;
-  opacity: 0.54;
+  opacity: 0.5;
 }
 
-#root {
-  min-height: 100vh;
+/* --- focus ---------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- theme switching + motion --------------------------------------------- */
+
+/* Applied for one transition window by the theme hook, so the switch eases
+   instead of snapping - but only where it reads as intentional. */
+html.theme-transition,
+html.theme-transition body,
+html.theme-transition body * {
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- scrollbars ----------------------------------------------------------- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line2) transparent;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-clip: padding-box;
+  background-color: var(--line2);
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--tx3);
+}
+
+/* --- shared primitives ---------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+
+.pill {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.visually-hidden {
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }

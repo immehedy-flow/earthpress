@@ -1,39 +1,40 @@
-import { useMemo, useState } from 'react'
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronsUpDown,
-  Download,
-  FolderOpen,
-  FolderSearch,
-  ImagePlus,
-  Leaf,
-  Loader2,
-  RefreshCw,
-  SlidersHorizontal,
-  Trash2,
-  XCircle,
-} from 'lucide-react'
-import './App.css'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
+import { AddBar } from './components/AddBar'
+import { BatchHeader } from './components/BatchHeader'
+import { DropOverlay } from './components/DropOverlay'
+import { ImageList } from './components/ImageList'
+import { PreviewCard } from './components/PreviewCard'
+import { SettingsPanel } from './components/SettingsPanel'
+import { ShortcutsSheet } from './components/ShortcutsSheet'
+import { SummaryCard } from './components/SummaryCard'
+import { TitleBar } from './components/TitleBar'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useTheme } from './hooks/useTheme'
+import { formatLabel } from './utils/formats'
+import { formatBytes, formatCount } from './utils/format'
+import { applyPreset } from './utils/presets'
 import type {
-  AspectPreset,
+  ConversionProgress,
   ConvertOptions,
   ConvertResult,
-  CropPosition,
-  FitMode,
-  ImageFormat,
+  ImageEstimate,
   ImageItem,
-  ResizeKind,
-  SizeMode,
+  ImageTarget,
+  Preset,
+  SortField,
+  SortOrder,
 } from './types'
+import './App.css'
 
 const defaultOptions: ConvertOptions = {
   format: 'webp',
-  quality: 82,
+  quality: 80,
   lossless: false,
-  sizeMode: 'original',
+  qualityMode: 'level',
+  targetBytes: 200 * 1024,
+  sizeMode: 'resize',
   resizeKind: 'max',
-  resizeMode: 'original',
   resizeValue: 1600,
   aspectPreset: '1:1',
   customWidth: 1080,
@@ -41,522 +42,458 @@ const defaultOptions: ConvertOptions = {
   fitMode: 'cover',
   cropPosition: 'center',
   background: '#fffaf2',
-  allowUpscale: false,
   pngCompression: 8,
   pngPalette: false,
-  preserveMetadata: false,
   overwrite: false,
   filenameSuffix: '-earthpress',
   outputDir: '',
 }
 
-const aspectPresets: Array<{ value: AspectPreset; label: string; hint: string }> = [
-  { value: '1:1', label: 'Square', hint: '1:1' },
-  { value: '4:5', label: 'Portrait', hint: '4:5' },
-  { value: '5:4', label: 'Frame', hint: '5:4' },
-  { value: '4:3', label: 'Classic', hint: '4:3' },
-  { value: '3:2', label: 'Photo', hint: '3:2' },
-  { value: '16:9', label: 'Wide', hint: '16:9' },
-  { value: '9:16', label: 'Story', hint: '9:16' },
-]
-
-function RatioIcon({ ratio }: { ratio: AspectPreset }) {
-  const [width, height] = ratio.split(':').map(Number)
-  const landscape = width >= height
-  const iconWidth = landscape ? 30 : Math.max(14, Math.round((width / height) * 30))
-  const iconHeight = landscape ? Math.max(14, Math.round((height / width) * 30)) : 30
-
-  return (
-    <span className="ratio-icon" aria-hidden="true">
-      <span style={{ width: iconWidth, height: iconHeight }} />
-    </span>
-  )
-}
-
-function formatBytes(bytes = 0) {
-  if (bytes < 1024) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB']
-  let size = bytes / 1024
-  let unit = units[0]
-  for (let index = 1; index < units.length && size >= 1024; index += 1) {
-    size /= 1024
-    unit = units[index]
-  }
-  return `${size.toFixed(size >= 10 ? 1 : 2)} ${unit}`
-}
-
-function formatName(format: ImageFormat) {
-  return format === 'jpg' ? 'JPG' : format.toUpperCase()
-}
+const ESTIMATE_DEBOUNCE = 260
 
 function App() {
   const [images, setImages] = useState<ImageItem[]>([])
   const [options, setOptions] = useState<ConvertOptions>(defaultOptions)
   const [results, setResults] = useState<Record<string, ConvertResult>>({})
+  const [progress, setProgress] = useState<Record<string, ConversionProgress>>({})
+  const [estimates, setEstimates] = useState<Record<string, ImageEstimate>>({})
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [message, setMessage] = useState('Add images to begin.')
+  const [notice, setNotice] = useState<string | null>(null)
+  const { preference, selectTheme } = useTheme()
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [sortField, setSortField] = useState<SortField>('added')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [dragActiveIndex, setDragActiveIndex] = useState<number | null>(null)
 
+  // One estimate pass at a time, always for the newest settings.
+  const estimateRequest = useRef<{
+    inputs: Array<Pick<ImageItem, 'id' | 'path' | 'width' | 'height'>>
+    options: ConvertOptions
+  } | null>(null)
+  const estimateBusy = useRef(false)
+  const estimateToken = useRef(0)
+  /** Only estimate-relevant settings; typing a filename suffix must not re-run it. */
+  const lastEstimateKey = useRef('')
+
+  const converted = useMemo(() => Object.values(results).filter((r) => r.ok), [results])
+  const hasResults = Object.keys(results).length > 0
   const totalSize = useMemo(() => images.reduce((sum, image) => sum + image.size, 0), [images])
-  const converted = Object.values(results).filter((result) => result.ok)
-  const savedTotal = converted.reduce((sum, result) => sum + (result.savedBytes || 0), 0)
-  const sizeSummary =
-    options.sizeMode === 'custom'
-      ? `${options.customWidth} x ${options.customHeight}`
-      : options.sizeMode === 'aspect'
-        ? options.aspectPreset
-        : options.sizeMode === 'resize'
-          ? `${options.resizeKind} ${options.resizeValue}`
-          : 'Original'
 
-  const mergeImages = (incoming: ImageItem[]) => {
+  const mergeImages = useCallback((incoming: ImageItem[]) => {
     const valid = incoming.filter((image) => image.path && !image.error)
     const failed = incoming.filter((image) => image.error)
+
     setImages((current) => {
       const known = new Set(current.map((image) => image.path))
       return [...current, ...valid.filter((image) => !known.has(image.path))]
     })
+    // A new file means the batch no longer matches what is on screen.
     setResults({})
-    if (failed.length > 0) {
-      setMessage(`${valid.length} added. ${failed.length} file could not be read.`)
-    } else if (valid.length > 0) {
-      setMessage(`${valid.length} image${valid.length === 1 ? '' : 's'} added.`)
-    }
-  }
+    setProgress({})
+    setNotice(
+      failed.length > 0
+        ? `${formatCount(failed.length)} could not be read and ${failed.length === 1 ? 'was' : 'were'} skipped.`
+        : null,
+    )
+  }, [])
 
-  const chooseImages = async () => {
+  const chooseImages = useCallback(async () => {
     const selected = await window.earthpress.selectImages()
     mergeImages(selected)
-  }
+  }, [mergeImages])
 
-  const chooseOutputDir = async () => {
+  const chooseOutputDir = useCallback(async () => {
     const dir = await window.earthpress.selectOutputDir()
     if (dir) setOptions((current) => ({ ...current, outputDir: dir }))
-  }
+  }, [])
 
-  const onDrop = async (event: React.DragEvent<HTMLElement>) => {
-    event.preventDefault()
-    setIsDragging(false)
-    const paths = [...event.dataTransfer.files]
-      .map((file) => window.earthpress.getPathForFile(file))
-      .filter(Boolean)
-    if (paths.length === 0) return
-    const inspected = await window.earthpress.inspectFiles(paths)
-    mergeImages(inspected)
-  }
+  // The OS drag/drop listener replaces Electron's HTML5 dataTransfer handling.
+  useEffect(
+    () =>
+      window.earthpress.subscribeDragDrop({
+        onHover: setIsDragging,
+        onDrop: (paths) => {
+          void window.earthpress.inspectFiles(paths).then(mergeImages)
+        },
+      }),
+    [mergeImages],
+  )
 
-  const convert = async () => {
+  useEffect(() => {
+    const unsub = window.earthpress.onConversionProgress?.((update: ConversionProgress) => {
+      setProgress((prev) => ({ ...prev, [update.id]: update }))
+    })
+    return () => unsub?.()
+  }, [])
+
+  // The selected row is derived at render time, so removing files never leaves
+  // a dangling selection behind.
+
+  /**
+   * Drains queued estimate requests, one pass at a time.
+   *
+   * A pass that is already running keeps its results; anything queued while it
+   * runs is picked up straight after, so a slider drag ends with the numbers
+   * matching the final position rather than the first one.
+   */
+  const pumpEstimates = useCallback(async () => {
+    if (estimateBusy.current) return
+    estimateBusy.current = true
+
+    try {
+      while (estimateRequest.current) {
+        const request = estimateRequest.current
+        estimateRequest.current = null
+        const token = ++estimateToken.current
+
+        try {
+          const result = await window.earthpress.estimateImages(request.inputs, request.options)
+          if (token === estimateToken.current) {
+            setEstimates(Object.fromEntries(result.map((estimate) => [estimate.id, estimate])))
+          }
+        } catch {
+          // Estimates are a convenience. Rows simply keep whatever they had.
+          return
+        }
+      }
+    } finally {
+      estimateBusy.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (images.length === 0) {
-      setMessage('Add at least one image first.')
+      estimateRequest.current = null
       return
     }
-    if (!options.outputDir) {
-      setMessage('Choose an output folder before converting.')
-      return
+
+    // Never compete with a conversion for the CPU.
+    if (isConverting) return
+
+    const key = JSON.stringify([
+      images.map((image) => [image.id, image.width, image.height]),
+      options.format,
+      options.quality,
+      options.lossless,
+      options.qualityMode,
+      options.targetBytes,
+      options.sizeMode,
+      options.resizeKind,
+      options.resizeValue,
+      options.aspectPreset,
+      options.customWidth,
+      options.customHeight,
+      options.fitMode,
+      options.cropPosition,
+      options.background,
+      options.pngCompression,
+      options.pngPalette,
+    ])
+
+    if (lastEstimateKey.current === key) return
+    lastEstimateKey.current = key
+
+    const inputs = images.map(({ id, path, width, height }) => ({ id, path, width, height }))
+    const timer = window.setTimeout(() => {
+      estimateRequest.current = { inputs, options }
+      void pumpEstimates()
+    }, ESTIMATE_DEBOUNCE)
+
+    return () => window.clearTimeout(timer)
+  }, [images, isConverting, options, pumpEstimates])
+
+  /** Target geometry, as measured by the estimator. */
+  const targets = useMemo(() => {
+    const map: Record<string, ImageTarget> = {}
+    for (const [id, estimate] of Object.entries(estimates)) {
+      map[id] = { id, width: estimate.outputWidth, height: estimate.outputHeight }
     }
+    return map
+  }, [estimates])
+
+  const targetMisses = useMemo(
+    () => Object.values(estimates).filter((estimate) => !estimate.meetsTarget).length,
+    [estimates],
+  )
+
+  const convert = useCallback(async () => {
+    if (images.length === 0) return
 
     setIsConverting(true)
-    setMessage(`Converting ${images.length} image${images.length === 1 ? '' : 's'}...`)
-    const conversionResults = await window.earthpress.convertImages(images, options)
-    const nextResults = Object.fromEntries(conversionResults.map((result) => [result.id, result]))
-    setResults(nextResults)
+    setProgress({})
+    setResults({})
+    setNotice(null)
+
+    try {
+      const conversionResults = await window.earthpress.convertImages(images, options)
+      const nextResults = Object.fromEntries(
+        conversionResults.map((result) => [result.id, result]),
+      )
+      setResults(nextResults)
+
+      const failed = conversionResults.filter((result) => !result.ok).length
+      setNotice(failed > 0 ? `${formatCount(failed)} could not be written. Retry from the list.` : null)
+
+      // A long batch deserves a nudge when the user has walked away.
+      const converted = conversionResults.filter((result) => result.ok)
+      const saved = converted.reduce(
+        (total, result) => total + Math.max(0, result.savedBytes ?? 0),
+        0,
+      )
+      void window.earthpress.notifyBatchFinished?.(
+        failed > 0 ? 'Batch finished with problems' : 'Batch complete',
+        failed > 0
+          ? `${formatCount(converted.length)} converted, ${formatCount(failed)} could not be written.`
+          : `${formatCount(converted.length)} converted · saved ${formatBytes(saved)}.`,
+      )
+    } catch (error) {
+      // Tauri rejects `invoke` with the raw string our command returned, so
+      // unwrap both shapes rather than dropping the backend's message.
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string' && error
+            ? error
+            : 'Conversion failed.'
+      setNotice(detail)
+    } finally {
+      setProgress({})
+      setIsConverting(false)
+    }
+  }, [images, options])
+
+  const cancelConversion = useCallback(async () => {
+    await window.earthpress.cancelConversion()
     setIsConverting(false)
+    setProgress({})
+    setNotice('Conversion cancelled. The files already written are still there.')
+  }, [])
 
-    const okCount = conversionResults.filter((result) => result.ok).length
-    setMessage(`${okCount} of ${conversionResults.length} image${conversionResults.length === 1 ? '' : 's'} converted.`)
-  }
+  const retryImage = useCallback(
+    async (id: string) => {
+      const image = images.find((item) => item.id === id)
+      if (!image || isConverting) return
 
-  const removeImage = (id: string) => {
+      setIsConverting(true)
+      setNotice(null)
+
+      try {
+        const [result] = await window.earthpress.convertImages([image], options)
+        if (result) setResults((current) => ({ ...current, [result.id]: result }))
+      } catch (error) {
+        setNotice(typeof error === 'string' ? error : 'Conversion failed.')
+      } finally {
+        setProgress({})
+        setIsConverting(false)
+      }
+    },
+    [images, isConverting, options],
+  )
+
+  /** Back to editing. Output files stay exactly where they are. */
+  const undoConvert = useCallback(() => {
+    setResults({})
+    setProgress({})
+    setNotice(null)
+  }, [])
+
+  const removeImage = useCallback((id: string) => {
     setImages((current) => current.filter((image) => image.id !== id))
     setResults((current) => {
       const next = { ...current }
       delete next[id]
       return next
     })
-  }
+  }, [])
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setImages([])
     setResults({})
-    setMessage('Workspace cleared.')
-  }
+    setProgress({})
+    setNotice(null)
+  }, [])
 
-  const updateOption = <K extends keyof ConvertOptions>(key: K, value: ConvertOptions[K]) => {
-    setOptions((current) => ({ ...current, [key]: value }))
-  }
+  const updateOption = useCallback(
+    <K extends keyof ConvertOptions>(key: K, value: ConvertOptions[K]) => {
+      setOptions((current) => ({ ...current, [key]: value }))
+    },
+    [],
+  )
+
+  const applySavedPreset = useCallback((preset: Preset) => {
+    setOptions((current) => applyPreset(preset, current))
+  }, [])
+
+  const openOutputFolder = useCallback(() => {
+    const target = options.outputDir || converted[0]?.outputPath
+    if (target) void window.earthpress.revealPath(target)
+  }, [converted, options.outputDir])
+
+  // Sorting. "Added" keeps the order the files came in, which is also the order
+  // drag-to-reorder works on.
+  const sortedImages = useMemo(() => {
+    if (sortField === 'added') return images
+
+    const direction = sortOrder === 'asc' ? 1 : -1
+    return [...images].sort((a, b) => {
+      if (sortField === 'name') return a.name.localeCompare(b.name) * direction
+      if (sortField === 'size') return (a.size - b.size) * direction
+      if (sortField === 'width') return (a.width - b.width) * direction
+      if (sortField === 'height') return (a.height - b.height) * direction
+      return a.format.localeCompare(b.format) * direction
+    })
+  }, [images, sortField, sortOrder])
+
+  const handleSortChange = useCallback((field: SortField) => {
+    setSortField((previous) => {
+      if (previous === field) {
+        setSortOrder((order) => (order === 'asc' ? 'desc' : 'asc'))
+        return previous
+      }
+      setSortOrder('asc')
+      return field
+    })
+  }, [])
+
+  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setImages((current) => {
+      const next = [...current]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
+    })
+    setDragActiveIndex(toIndex)
+  }, [])
+
+  const selectedImage = useMemo(
+    () => images.find((image) => image.id === selectedId) ?? images[0] ?? null,
+    [images, selectedId],
+  )
+
+  const sizeReadout = useMemo(() => {
+    if (!selectedImage) return null
+    const target = targets[selectedImage.id]
+    return target ? `${target.width} × ${target.height} px` : null
+  }, [selectedImage, targets])
+
+  useKeyboardShortcuts({
+    'ctrl+o': chooseImages,
+    'ctrl+shift+o': chooseOutputDir,
+    'ctrl+enter': isConverting ? undefined : convert,
+    '?': () => setShowShortcuts(true),
+    escape: () => {
+      if (showShortcuts) {
+        setShowShortcuts(false)
+        return
+      }
+      if (isConverting) void cancelConversion()
+    },
+    // The hook maps both Delete and Ctrl+D onto the same handler.
+    delete: clearAll,
+    'ctrl+d': clearAll,
+  })
+
+  const outputLabel = formatLabel(options.format)
 
   return (
-    <main
-      className="app-shell"
-      onDragOver={(event) => {
-        event.preventDefault()
-        setIsDragging(true)
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={onDrop}
-    >
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <Leaf size={22} />
-          </span>
-          <div>
-            <h1>EarthPress</h1>
-            <p>Local image conversion and compression for Windows</p>
-          </div>
-        </div>
-        <div className="summary-strip" aria-label="Batch summary">
-          <span>{images.length} files</span>
-          <span>{formatBytes(totalSize)}</span>
-          <span>{savedTotal > 0 ? `${formatBytes(savedTotal)} saved` : 'Ready offline'}</span>
-        </div>
-      </header>
+    <main className="app-shell">
+      <TitleBar
+        images={images}
+        results={results}
+        estimates={estimates}
+        preference={preference}
+        onSelectTheme={selectTheme}
+        onShowShortcuts={() => setShowShortcuts(true)}
+      />
+
+      <DropOverlay active={isDragging} />
+      <ShortcutsSheet open={showShortcuts} onClose={() => setShowShortcuts(false)} />
 
       <section className="workspace">
-        <section className="image-area" aria-label="Images">
-          <div className={`drop-zone ${isDragging ? 'is-dragging' : ''}`}>
-            <div>
-              <ImagePlus size={30} />
-              <h2>Drop images here</h2>
-              <p>PNG, JPG, WebP, AVIF, TIFF, and BMP are welcome.</p>
-            </div>
-            <button type="button" className="primary-button" onClick={chooseImages}>
-              <ImagePlus size={18} />
-              Add images
-            </button>
-          </div>
+        <section className="image-area" aria-label="Batch">
+          <AddBar onChooseImages={chooseImages} />
 
-          <div className="list-toolbar">
-            <div>
-              <strong>Batch</strong>
-              <span>{message}</span>
-            </div>
-            <button type="button" className="ghost-button" onClick={clearAll} disabled={images.length === 0}>
-              <Trash2 size={16} />
-              Clear
-            </button>
-          </div>
-
-          <div className="image-list">
-            {images.length === 0 ? (
-              <div className="empty-state">
-                <ImagePlus size={42} />
-                <p>Your images will appear here with size, dimensions, and conversion status.</p>
-              </div>
-            ) : (
-              images.map((image) => {
-                const result = results[image.id]
-                return (
-                  <article className="image-row" key={image.id}>
-                    <img src={image.preview} alt="" />
-                    <div className="image-meta">
-                      <strong title={image.name}>{image.name}</strong>
-                      <span>
-                        {image.width} x {image.height} · {image.format.toUpperCase()} · {formatBytes(image.size)}
-                      </span>
-                      {result?.ok && <span className="output-note">{formatBytes(result.outputSize)} output</span>}
-                      {result && !result.ok && <span className="error-text">{result.error}</span>}
-                    </div>
-                    <div className="row-actions">
-                      {result?.ok && <CheckCircle2 className="status-ok" size={22} aria-label="Converted" />}
-                      {result && !result.ok && <XCircle className="status-error" size={22} aria-label="Failed" />}
-                      {result?.ok && (
-                        <button
-                          type="button"
-                          className="icon-button folder-icon"
-                          onClick={() => result.outputPath && window.earthpress.revealPath(result.outputPath)}
-                          aria-label="Show converted image in folder"
-                          title="Show in folder"
-                        >
-                          <FolderSearch size={16} />
-                        </button>
-                      )}
-                      <button type="button" className="icon-button" onClick={() => removeImage(image.id)} aria-label="Remove image">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </article>
-                )
-              })
-            )}
-          </div>
-        </section>
-
-        <aside className="settings-panel" aria-label="Conversion settings">
-          <div className="panel-heading">
-            <SlidersHorizontal size={20} />
-            <h2>Settings</h2>
-          </div>
-
-          <label className="field">
-            <span>Output format</span>
-            <div className="segmented">
-              {(['webp', 'jpg', 'png', 'avif'] as ImageFormat[]).map((format) => (
-                <button
-                  type="button"
-                  key={format}
-                  className={options.format === format ? 'active' : ''}
-                  onClick={() => updateOption('format', format)}
-                >
-                  {formatName(format)}
-                </button>
-              ))}
-            </div>
-          </label>
-
-          <div className="settings-group">
-            <div className="group-title">
-              <span>Quality</span>
-              <strong>{options.format === 'png' ? 'PNG' : options.lossless ? 'Lossless' : options.quality}</strong>
-            </div>
-            <div className="range-line compact-range">
-              <input
-                type="range"
-                min="1"
-                max="100"
-                value={options.quality}
-                disabled={options.format === 'png' || options.lossless}
-                onChange={(event) => updateOption('quality', Number(event.target.value))}
-              />
-              <strong>{options.quality}</strong>
-            </div>
-            <label className="toggle-line compact-toggle">
-              <input
-                type="checkbox"
-                checked={options.lossless}
-                disabled={options.format === 'jpg' || options.format === 'png'}
-                onChange={(event) => updateOption('lossless', event.target.checked)}
-              />
-              <span>Lossless WebP/AVIF</span>
-            </label>
-          </div>
-
-          <div className="settings-group">
-            <div className="group-title">
-              <span>Size</span>
-              <strong>{sizeSummary}</strong>
-            </div>
-
-            <div className="segmented four-way">
-              {[
-                ['original', 'Original'],
-                ['resize', 'Resize'],
-                ['aspect', 'Ratio'],
-                ['custom', 'Custom'],
-              ].map(([mode, label]) => (
-                <button
-                  type="button"
-                  key={mode}
-                  className={options.sizeMode === mode ? 'active' : ''}
-                  onClick={() => updateOption('sizeMode', mode as SizeMode)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {options.sizeMode === 'resize' && (
-              <div className="two-col uneven">
-                <label className="field">
-                  <span>Resize by</span>
-                  <div className="select-wrap">
-                    <select value={options.resizeKind} onChange={(event) => updateOption('resizeKind', event.target.value as ResizeKind)}>
-                      <option value="max">Max side</option>
-                      <option value="width">Width</option>
-                      <option value="height">Height</option>
-                      <option value="percent">Percent</option>
-                    </select>
-                    <ChevronsUpDown size={16} />
-                  </div>
-                </label>
-                <label className="field">
-                  <span>{options.resizeKind === 'percent' ? 'Scale' : 'Pixels'}</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={options.resizeValue}
-                    onChange={(event) => updateOption('resizeValue', Number(event.target.value))}
-                  />
-                </label>
-              </div>
-            )}
-
-            {options.sizeMode === 'aspect' && (
-              <div className="preset-grid" aria-label="Aspect ratio presets">
-                {aspectPresets.map((preset) => (
-                  <button
-                    type="button"
-                    key={preset.value}
-                    className={options.aspectPreset === preset.value ? 'active' : ''}
-                    onClick={() => updateOption('aspectPreset', preset.value)}
-                    title={`${preset.label} ${preset.hint}`}
-                  >
-                    <RatioIcon ratio={preset.value} />
-                    <span>{preset.hint}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {options.sizeMode === 'custom' && (
-              <div className="two-col">
-                <label className="field">
-                  <span>Width</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={options.customWidth}
-                    onChange={(event) => updateOption('customWidth', Number(event.target.value))}
-                  />
-                </label>
-                <label className="field">
-                  <span>Height</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={options.customHeight}
-                    onChange={(event) => updateOption('customHeight', Number(event.target.value))}
-                  />
-                </label>
-              </div>
-            )}
-
-            {(options.sizeMode === 'aspect' || options.sizeMode === 'custom') && (
-              <>
-                <label className="field">
-                  <span>Object fit</span>
-                  <div className="select-wrap">
-                    <select value={options.fitMode} onChange={(event) => updateOption('fitMode', event.target.value as FitMode)}>
-                      <option value="cover">Cover - crop edges</option>
-                      <option value="contain">Contain - add background</option>
-                      <option value="fill">Fill - stretch to size</option>
-                      <option value="inside">Inside - fit within size</option>
-                      <option value="outside">Outside - fill beyond size</option>
-                    </select>
-                    <ChevronsUpDown size={16} />
-                  </div>
-                </label>
-
-                <div className="two-col">
-                  <label className="field">
-                    <span>Focus</span>
-                    <div className="select-wrap">
-                      <select
-                        value={options.cropPosition}
-                        onChange={(event) => updateOption('cropPosition', event.target.value as CropPosition)}
-                      >
-                        <option value="center">Center</option>
-                        <option value="attention">Smart attention</option>
-                        <option value="entropy">Smart detail</option>
-                        <option value="top">Top</option>
-                        <option value="right">Right</option>
-                        <option value="bottom">Bottom</option>
-                        <option value="left">Left</option>
-                      </select>
-                      <ChevronsUpDown size={16} />
-                    </div>
-                  </label>
-                  {options.fitMode === 'contain' && (
-                    <label className="field">
-                      <span>Background</span>
-                      <input
-                        type="color"
-                        value={options.background}
-                        onChange={(event) => updateOption('background', event.target.value)}
-                        aria-label="Background color for contain fit"
-                      />
-                    </label>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className={`advanced-panel ${advancedOpen ? 'open' : ''}`}>
-            <button type="button" className="advanced-toggle" onClick={() => setAdvancedOpen((open) => !open)}>
-              <span>Advanced</span>
-              <ChevronDown size={17} />
-            </button>
-
-            {advancedOpen && (
-              <div className="advanced-body">
-                <label className="toggle-line">
-                  <input
-                    type="checkbox"
-                    checked={options.allowUpscale}
-                    onChange={(event) => updateOption('allowUpscale', event.target.checked)}
-                  />
-                  <span>Allow enlargement</span>
-                </label>
-
-                <label className="toggle-line">
-                  <input
-                    type="checkbox"
-                    checked={options.pngPalette}
-                    disabled={options.format !== 'png'}
-                    onChange={(event) => updateOption('pngPalette', event.target.checked)}
-                  />
-                  <span>Indexed PNG palette</span>
-                </label>
-
-                <label className="toggle-line">
-                  <input
-                    type="checkbox"
-                    checked={options.preserveMetadata}
-                    onChange={(event) => updateOption('preserveMetadata', event.target.checked)}
-                  />
-                  <span>Preserve metadata</span>
-                </label>
-
-                <label className="toggle-line">
-                  <input
-                    type="checkbox"
-                    checked={options.overwrite}
-                    onChange={(event) => updateOption('overwrite', event.target.checked)}
-                  />
-                  <span>Overwrite existing files</span>
-                </label>
-
-                <label className="field">
-                  <span>Filename suffix</span>
-                  <input
-                    type="text"
-                    value={options.filenameSuffix}
-                    placeholder="-earthpress"
-                    onChange={(event) => updateOption('filenameSuffix', event.target.value)}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-
-          <div className="sticky-actions">
-            <div className="output-picker">
-              <span>Output folder</span>
-              <button type="button" className="folder-button" onClick={chooseOutputDir}>
-                <FolderOpen size={17} />
-                {options.outputDir || 'Choose folder'}
-              </button>
-            </div>
-
-            <button type="button" className="convert-button" onClick={convert} disabled={isConverting}>
-              {isConverting ? <Loader2 className="spin" size={19} /> : <Download size={19} />}
-              Convert batch
-            </button>
-
-            {converted.length > 0 && (
+          {notice ? (
+            <div className="notice" role="status">
+              <span className="notice__text">{notice}</span>
               <button
                 type="button"
-                className="secondary-button"
-                onClick={() => converted[0].outputPath && window.earthpress.revealPath(converted[0].outputPath)}
+                className="notice__close"
+                aria-label="Dismiss message"
+                onClick={() => setNotice(null)}
               >
-                <RefreshCw size={16} />
-                Open latest output
+                <X size={13} strokeWidth={2} />
               </button>
-            )}
-          </div>
-        </aside>
+            </div>
+          ) : null}
+
+          <BatchHeader
+            count={images.length}
+            totalSize={totalSize}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSortChange={handleSortChange}
+            onClear={clearAll}
+            disabled={images.length === 0}
+          />
+
+          <ImageList
+            images={sortedImages}
+            results={results}
+            progress={progress}
+            estimates={estimates}
+            targets={targets}
+            selectedId={selectedImage?.id ?? null}
+            outputLabel={outputLabel}
+            isConverting={isConverting}
+            reorderEnabled={sortField === 'added' && !isConverting}
+            onSelect={setSelectedId}
+            onRemove={removeImage}
+            onRetry={(id) => void retryImage(id)}
+            onReveal={(path) => void window.earthpress.revealPath(path)}
+            onReorder={handleReorder}
+            dragActiveIndex={dragActiveIndex}
+            onDragStart={setDragActiveIndex}
+            onDragEnd={() => setDragActiveIndex(null)}
+          />
+
+          {images.length > 0 && selectedImage ? (
+            hasResults ? (
+              <SummaryCard
+                images={images}
+                results={results}
+                options={options}
+                formatLabel={outputLabel}
+                onOpenFolder={openOutputFolder}
+                onUndo={undoConvert}
+              />
+            ) : (
+              <PreviewCard
+                image={selectedImage}
+                target={targets[selectedImage.id]}
+                estimate={estimates[selectedImage.id]}
+                options={options}
+              />
+            )
+          ) : null}
+        </section>
+
+        <SettingsPanel
+          options={options}
+          onChange={updateOption}
+          onApplyPreset={applySavedPreset}
+          onChooseOutputDir={chooseOutputDir}
+          onConvert={() => void convert()}
+          onCancel={() => void cancelConversion()}
+          isConverting={isConverting}
+          count={images.length}
+          totalSize={totalSize}
+          hasResults={hasResults}
+          sizeReadout={sizeReadout}
+          targetMisses={targetMisses}
+        />
       </section>
     </main>
   )

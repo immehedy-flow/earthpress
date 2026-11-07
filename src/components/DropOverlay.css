@@ -1,0 +1,43 @@
+.drop-overlay {
+  align-items: center;
+  animation: drop-in 120ms var(--ease);
+  backdrop-filter: blur(3px);
+  background: color-mix(in oklab, var(--bg) 70%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: fixed;
+  z-index: 50;
+}
+
+.drop-overlay__card {
+  align-items: center;
+  background: var(--panel);
+  border: 2px dashed var(--acc);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow);
+  color: var(--acc);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 34px 52px;
+}
+
+.drop-overlay__title {
+  color: var(--tx);
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.drop-overlay__hint {
+  color: var(--tx3);
+  font-size: 12.5px;
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+  }
+}

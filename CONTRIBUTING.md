@@ -1,31 +1,45 @@
-# Contributing to EarthPress
+# Contributing
 
-Thanks for your interest in contributing to EarthPress! Whether it's a bug fix, a new feature, a UX suggestion, or a documentation fix, contributions are welcome.
+Thanks for taking a look at EarthPress. The project is a Tauri v2 desktop app:
+a React/TypeScript frontend in `src/` and a pure-Rust image pipeline in
+`src-tauri/src/`.
 
-## Ways to Contribute
+## Before you start
 
-- **Report a bug** — open an issue with steps to reproduce, your Windows version, and (if possible) a screenshot
-- **Suggest a feature** — open an issue describing the problem it solves, not just the solution
-- **Submit code** — see the workflow below
-- **Improve documentation** — README clarity, setup instructions, and usage examples all count
+Read the licence constraints in `README.md` and `THIRD_PARTY_NOTICES.md`. Two
+rules are load-bearing:
 
-## Code Contribution Workflow
+* **Do not bump `zenwebp` past 0.2.x.** Later releases are AGPL-3.0.
+* **Do not enable the AV1 `asm` features.** They require NASM and break the
+  pure-Rust build.
 
-1. Fork the repository
-2. Create a branch for your change (`git checkout -b fix/short-description` or `feature/short-description`)
-3. Make your changes, keeping each PR focused on a single fix or feature
-4. Update documentation if your change affects usage or setup
-5. Commit with a clear message describing what changed and why
-6. Push your branch and open a pull request against `main`
-7. Describe what the PR does and reference any related issue
+## Setup
 
-## Guidelines
+```powershell
+npm install
+npm run dev          # tauri dev
+```
 
-- Keep code and documentation clear and concise
-- Match the existing project structure and code style where possible
-- Be constructive and collaborative in reviews and discussion
-- Small, focused PRs are easier to review than large ones — if a change is big, consider opening an issue first to discuss the approach
+Rust 1.98+ with the MSVC toolchain and the Windows SDK are required. No C
+compiler, NASM or CMake is needed.
 
-## Copyright
+## Checks
 
-By contributing, you agree that your work may be included under the project's MIT license.
+```powershell
+npx tsc -b
+npx oxlint src
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+CI runs the same three commands on Windows. Please keep the Rust suite green and
+add a test when you change the pipeline, path handling or estimates.
+
+## Pull requests
+
+* Keep the change focused; separate UI, backend and dependency updates.
+* Match the existing style (two-space TS, `rustfmt` defaults, comments explain
+  *why*).
+* Update `README.md` or `THIRD_PARTY_NOTICES.md` when behaviour or
+  dependencies change.
+* Describe the user-visible effect and how you verified it (browser harness,
+  native run, or tests).

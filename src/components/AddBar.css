@@ -1,0 +1,83 @@
+/* Slim add bar. Spec: 64px tall, 1.5px dashed border, card fill. */
+
+.add-bar {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px dashed var(--line2);
+  border-radius: 16px;
+  display: flex;
+  flex: none;
+  gap: 14px;
+  height: 64px;
+  margin: 16px 16px 0;
+  padding: 0 12px 0 14px;
+  transition:
+    border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease);
+}
+
+.add-bar__badge {
+  align-items: center;
+  background: var(--soft);
+  border-radius: 18px;
+  color: var(--acc);
+  display: flex;
+  flex: none;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.add-bar__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-bar__title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.add-bar__hint {
+  color: var(--tx3);
+  font-size: 12.5px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-bar__button {
+  align-items: center;
+  background: var(--accf);
+  border: 0;
+  border-radius: 12px;
+  color: var(--onacc);
+  display: flex;
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 700;
+  gap: 10px;
+  height: 40px;
+  padding: 0 14px 0 16px;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.add-bar__button:hover {
+  background: color-mix(in oklab, var(--accf), #000 10%);
+}
+
+.add-bar__key {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+}
+
+@media (max-width: 1180px) {
+  .add-bar__hint {
+    display: none;
+  }
+}
