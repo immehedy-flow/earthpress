@@ -12,6 +12,8 @@ This is the **Tauri v2 + Rust** build, rewritten in 2.0.0 and hardened in
 estimates on every row and a byte-target mode; the image pipeline underneath is
 still pure Rust.
 
+![EarthPress 2.1.0 converting four images to WebP, with the before/after preview](documentation/screenshots/earthpress-2.1.0.jpg)
+
 ---
 
 ## Requirements
